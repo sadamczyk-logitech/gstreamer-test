@@ -1,6 +1,6 @@
 #include <gst/gst.h>
 
-#define SWITCH_TIMEOUT 1
+#define SWITCH_TIMEOUT 5
 #define NUM_VIDEO_BUFFERS 500
 
 static GMainLoop *loop;
@@ -92,7 +92,7 @@ main (gint argc, gchar * argv[])
     c1 = gst_element_factory_make ("videoconvert", NULL);
     c2 = gst_element_factory_make ("videoconvert", NULL);
     sink1 = gst_element_factory_make ("autovideosink", "sink1");
-    sink2 = gst_element_factory_make ("autovideosink", "sink2");
+    sink2 = gst_element_factory_make ("fakesink", "sink2");
 
     g_print("%p\n", sink1);
     g_print("%p\n", sink2);

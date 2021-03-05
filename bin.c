@@ -58,10 +58,8 @@ switch_cb (gpointer user_data)
 
     g_object_set (G_OBJECT (sel), "active-pad", new_pad, NULL);
 
-    GST_WARNING("switched from %s:%s to %s:%s\n", GST_DEBUG_PAD_NAME (old_pad),
-                GST_DEBUG_PAD_NAME (new_pad));
-//    g_print ("switched from %s:%s to %s:%s\n", GST_DEBUG_PAD_NAME (old_pad),
-//             GST_DEBUG_PAD_NAME (new_pad));
+    g_print ("switched from %s:%s to %s:%s\n", GST_DEBUG_PAD_NAME (old_pad),
+             GST_DEBUG_PAD_NAME (new_pad));
 
     gst_object_unref (old_pad);
 
@@ -89,24 +87,25 @@ main (gint argc, gchar * argv[])
     loop = g_main_loop_new (NULL, FALSE);
 
 
-    /* create elements */
+    /* Create pipeline */
     pipeline = gst_element_factory_make ("pipeline", "pipeline");
-    src = gst_element_factory_make ("videotestsrc", "src");
     osel = gst_element_factory_make ("output-selector", "osel");
-    sink1 = gst_element_factory_make ("autovideosink", "sink1");
+    sink1 = gst_element_factory_make ("autovideosink", "sink1"); //THIS IS GONNA BE OUR USB
     sink2 = gst_element_factory_make ("fakesink", "sink2");
     GstElement* bin = gst_bin_new("mybin");
+
+    src = gst_element_factory_make ("videotestsrc", "src");
 
     if (!pipeline || !src || !osel || !sink1 ||
         !sink2 || !bin) {
         g_print ("missing element\n");
         return -1;
     }
-    g_object_set (G_OBJECT (sink1), "sync", FALSE, NULL);
-    gst_bin_add_many((GstBin*)bin, sink1, sink2, osel, NULL);
-    /* handle deferred properties */
+    gst_bin_add_many((GstBin*)bin, osel, sink1, sink2,  NULL);
+    /* handle deferred properties This is because autosink creates child that has to have properties to be set*/
     g_signal_connect (G_OBJECT (sink1), "element-added",
                       G_CALLBACK (on_bin_element_added), NULL);
+    g_object_set (G_OBJECT (sink2), "sync", FALSE, "async", FALSE, NULL);
 
     sinkpad = gst_element_get_static_pad (osel, "sink");
     GstPad *ghost_pad = gst_ghost_pad_new("sink", sinkpad);
@@ -123,7 +122,6 @@ main (gint argc, gchar * argv[])
     }
     gst_object_unref (sinkpad);
 
-
     /* link output 2 */
     sinkpad = gst_element_get_static_pad (sink2, "sink");
     osel_src2 = gst_element_get_request_pad (osel, "src_%u");
@@ -132,33 +130,28 @@ main (gint argc, gchar * argv[])
         return -1;
     }
     gst_object_unref (sinkpad);
-
+    g_object_set (G_OBJECT (osel), "active-pad", osel_src2, NULL);
 
     /* add them to bin */
     gst_bin_add_many (GST_BIN (pipeline), src, bin, NULL);
 
     /* set properties */
-    g_object_set (G_OBJECT (src), "is-live", TRUE, NULL);
-    g_object_set (G_OBJECT (src), "do-timestamp", TRUE, NULL);
     g_object_set (G_OBJECT (src), "num-buffers", NUM_VIDEO_BUFFERS, NULL);
-//    g_object_set (G_OBJECT (osel), "resend-latest", TRUE, NULL);
     /* link src ! bin  */
     if (!gst_element_link (src, bin)) {
         g_print ("linking failed\n");
         return -1;
     }
 
-
-
-    /* add switch callback */
-    g_timeout_add_seconds (SWITCH_TIMEOUT, switch_cb, osel);
-
     /* change to playing */
 
     GstBus *bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
     gst_bus_add_watch (bus, my_bus_callback, loop);
     gst_object_unref (bus);
-    GstStateChangeReturn a = gst_element_set_state (pipeline, GST_STATE_PLAYING);
+    gst_element_set_state (pipeline, GST_STATE_PLAYING);
+
+    /* Some test stuff */
+    g_timeout_add_seconds (SWITCH_TIMEOUT, switch_cb, osel);
 
     /* now run */
     g_main_loop_run (loop);
